@@ -1,6 +1,10 @@
 version: 1
 backend:
   phases:
+    preBuild:
+      commands:
+        - echo "Installing package dependencies"
+        - npm install 
     build:
       commands:
         - npm ci --cache .npm --prefer-offline
