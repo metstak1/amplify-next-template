@@ -1,9 +1,10 @@
+// app/layout.tsx
+import "@aws-amplify/ui-react/styles.css";
 import type { Metadata } from "next";
 import { Inter } from "next/font/google";
-import "./app.css";
+import "./globals.css";
 
-import AuthenticatorWrapper from "./AuthenticatorWrapper";
-import "@aws-amplify/ui-react/styles.css";
+import ConfigureAmplifyClientSide from "@/components/ConfigureAmplify";
 
 const inter = Inter({ subsets: ["latin"] });
 
@@ -18,12 +19,10 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-        
     <html lang="en">
-      <body>      
-        <AuthenticatorWrapper>
-          {children}
-        </AuthenticatorWrapper>
+      <body className={inter.className}>
+        <ConfigureAmplifyClientSide />
+        {children}
       </body>
     </html>
   );
