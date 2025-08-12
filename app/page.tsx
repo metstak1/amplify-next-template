@@ -1,58 +1,46 @@
 // app/page.tsx
 
-import { revalidatePath } from "next/cache";
+"use client";
 
-import { AuthGetCurrentUserServer, cookiesClient } from "@/utils/amplify-utils";
+import { useEffect, useState, useTransition } from "react";
+import { useAuthenticator } from "@aws-amplify/ui-react";
+import { addTodoForCurrentUser } from "@/app/actions/todo";
 import AuthenticatorWrapper from "./AuthenticatorWrapper";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 
-async function TodoApp() {
-  const user = await AuthGetCurrentUserServer();
-  
-  // Only fetch todos for the current user (owner-based filtering)
-  const { data: todos } = await cookiesClient.models.Todo.list();
+function TodoApp() {
+  const { user } = useAuthenticator();
+  const [todos, setTodos] = useState<any[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [isPending, startTransition] = useTransition();
+  const [inputValue, setInputValue] = useState("");
 
-  async function addTodo(data: FormData) {
-    "use server";
-    const title = data.get("title") as string;
-    console.log("Adding todo:", title);
-    
-    try {
-      // Get current user for userId
-      const currentUser = await AuthGetCurrentUserServer();
-      if (!currentUser?.userId) {
-        console.error("User not authenticated");
-        return;
-      }
+  async function loadTodos() {
+    setLoading(true);
+    const res = await fetch("/api/todos");
+    const { todos } = await res.json();
+    setTodos(todos);
+    setLoading(false);
+  }
 
-      // Get user's organization membership (user should have one after onboarding)
-      const { data: memberships } = await cookiesClient.models.OrganizationMembership.list({
-        filter: { userId: { eq: currentUser.userId } }
-      });
-
-      if (!memberships || memberships.length === 0) {
-        console.error("User has no organization memberships");
-        return;
-      }
-
-      // Use user's first organization
-      const organizationId = memberships[0].organizationId;
-
-      const response = await cookiesClient.models.Todo.create({
-        content: title,
-        done: false,
-        priority: "medium",
-        organizationId: organizationId,
-        userId: currentUser.userId,
-      });
-      
-      console.log("Todo added successfully:", response);
-    } catch (error) {
-      console.error("Error adding todo:", error);
+  useEffect(() => {
+    if (user?.userId) {
+      loadTodos();
+    } else {
+      setTodos([]);
     }
-    
-    revalidatePath("/");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.userId]);
+
+  async function handleAddTodo(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    if (!inputValue.trim()) return;
+    await addTodoForCurrentUser(inputValue.trim());
+    setInputValue("");
+    startTransition(() => {
+      loadTodos();
+    });
   }
 
   return (
@@ -66,33 +54,34 @@ async function TodoApp() {
           Stay organized and get things done with ease
         </p>
       </div>
-
       {/* Add Todo Form */}
       <div className="bg-card border rounded-lg p-6 shadow-sm">
         <h2 className="text-lg font-semibold mb-4">Add New Todo</h2>
-        <form action={addTodo} className="flex gap-3">
+        <form onSubmit={handleAddTodo} className="flex gap-3">
           <input 
             type="text" 
             name="title" 
             placeholder="Enter a todo item"
             className="flex-1 px-3 py-2 border border-input bg-background rounded-md text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:border-transparent"
             required
+            value={inputValue}
+            onChange={e => setInputValue(e.target.value)}
           />
           <button 
             type="submit"
             className="px-4 py-2 bg-primary text-primary-foreground rounded-md text-sm font-medium hover:bg-primary/90 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 transition-colors"
+            disabled={isPending}
           >
-            Add Todo
+            {isPending ? "Adding..." : "Add Todo"}
           </button>
         </form>
       </div>
-
       {/* Todo List */}
       <div className="bg-card border rounded-lg shadow-sm">
         <div className="p-6 border-b">
           <h2 className="text-lg font-semibold">Your Todos</h2>
           <p className="text-sm text-muted-foreground mt-1">
-            {todos?.length || 0} {todos?.length === 1 ? 'item' : 'items'}
+            {loading ? "Loading..." : `${todos.length} ${todos.length === 1 ? 'item' : 'items'}`}
           </p>
         </div>
         <div className="p-6">
